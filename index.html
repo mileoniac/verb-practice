@@ -208,6 +208,8 @@
     min-height: 28px;
     direction: rtl;
   }
+
+  .speak-btn {
     display: inline-flex;
     align-items: center;
     gap: 8px;
@@ -225,6 +227,24 @@
 
   .speak-btn:active { transform: scale(0.96); }
   .speak-btn .icon { font-size: 1.3rem; }
+
+  .hint-btn {
+    display: inline-flex;
+    align-items: center;
+    gap: 8px;
+    background: #e8f4ff;
+    border: none;
+    border-radius: 50px;
+    padding: 10px 22px;
+    font-family: 'Fredoka One', cursive;
+    font-size: 1.1rem;
+    cursor: pointer;
+    color: #2c6fcc;
+    box-shadow: 0 3px 0 #a0c8f0;
+    transition: transform 0.1s;
+    margin-top: 10px;
+  }
+  .hint-btn:active { transform: scale(0.96); }
 
   .field-group {
     margin-bottom: 18px;
@@ -378,6 +398,8 @@
       <button class="speak-btn" onclick="speakCurrent()">
         <span class="icon">🔊</span> Hear it again
       </button>
+      <br>
+      <button class="hint-btn" id="hint-btn" onclick="showHint()">💡 Hint</button>
     </div>
 
     <div class="field-group">
@@ -396,7 +418,10 @@
       <button class="btn btn-blue" onclick="checkAnswer()" style="flex:2">✅ Check!</button>
       <button class="btn btn-gray" onclick="skipVerb()" style="flex:1">Skip →</button>
     </div>
-    <button class="btn btn-gray" onclick="confirmRestart()" style="margin-top:12px;font-size:0.95rem">🔄 Restart from beginning</button>
+    <div class="btn-row" style="margin-top:12px">
+      <button class="btn btn-gray" onclick="confirmRestart()" style="font-size:0.95rem">🔄 Restart</button>
+      <button class="btn btn-gray" onclick="confirmClear()" style="font-size:0.95rem">🗑️ New List</button>
+    </div>
   </div>
 </div>
 
@@ -421,6 +446,7 @@
   let score = 0;
   let results = [];
   let checked = false;
+  let hintTimer = null;
 
   function parseVerbs(text) {
     return text.split('\n')
@@ -461,11 +487,13 @@
 
   function loadVerb() {
     checked = false;
+    if (hintTimer) { clearTimeout(hintTimer); hintTimer = null; }
     const verb = verbs[current];
     const verbEl = document.getElementById('display-verb');
     verbEl.textContent = verb.present;
     verbEl.style.color = 'transparent';
     verbEl.style.background = '#ffd0d0';
+    document.getElementById('hint-btn').style.display = 'inline-flex';
     document.getElementById('hebrew-hint').textContent = verb.hebrew ? `🇮🇱 ${verb.hebrew}` : '';
     document.getElementById('present-input').value = '';
     document.getElementById('past-input').value = '';
@@ -545,6 +573,8 @@
     });
 
     checked = true;
+    if (hintTimer) { clearTimeout(hintTimer); hintTimer = null; }
+    document.getElementById('hint-btn').style.display = 'none';
 
     // reveal the word
     document.getElementById('display-verb').style.color = 'var(--primary)';
@@ -623,7 +653,30 @@
 
   function goHome() {
     document.getElementById('results-screen').style.display = 'none';
+    document.getElementById('practice-screen').style.display = 'none';
     document.getElementById('setup-screen').style.display = 'block';
+  }
+
+  function confirmClear() {
+    if (confirm('Go back and enter a new word list?')) {
+      if (hintTimer) { clearTimeout(hintTimer); hintTimer = null; }
+      goHome();
+    }
+  }
+
+  function showHint() {
+    if (checked) return;
+    const verbEl = document.getElementById('display-verb');
+    verbEl.style.color = 'var(--primary)';
+    verbEl.style.background = 'transparent';
+    if (hintTimer) clearTimeout(hintTimer);
+    hintTimer = setTimeout(() => {
+      if (!checked) {
+        verbEl.style.color = 'transparent';
+        verbEl.style.background = '#ffd0d0';
+      }
+      hintTimer = null;
+    }, 10000);
   }
 
   // allow Enter key to submit
