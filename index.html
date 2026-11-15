@@ -403,13 +403,13 @@
     </div>
 
     <div class="field-group">
-      <label>Present form <span>✏️ Type what you heard</span></label>
+      <label id="present-label">Present form <span id="present-label-sub">✏️ Type what you heard</span></label>
       <input type="text" class="answer-input" id="present-input" placeholder="Type the present verb..." autocomplete="off" autocorrect="off" autocapitalize="off" spellcheck="false">
       <div class="feedback" id="present-feedback"></div>
     </div>
 
     <div class="field-group">
-      <label>Past form <span>⏪ What happened yesterday?</span></label>
+      <label id="past-label">Past form <span id="past-label-sub">⏪ What happened yesterday?</span></label>
       <input type="text" class="answer-input" id="past-input" placeholder="Type the past verb..." autocomplete="off" autocorrect="off" autocapitalize="off" spellcheck="false">
       <div class="feedback" id="past-feedback"></div>
     </div>
@@ -453,13 +453,18 @@
       .map(line => line.trim())
       .filter(line => line.length > 0)
       .map(line => {
-        // split by comma or multiple spaces
-        let parts = line.split(/,\s*|\s{2,}|\t/).map(p => p.trim()).filter(Boolean);
+        line = line.replace(/^\d+\.\s*/, '');
+        let parts = line.split(/,\s*|\s+-\s+|\s{2,}|\t/).map(p => p.trim()).filter(Boolean);
         if (parts.length === 1) {
-          // try splitting by single space
           parts = line.split(/\s+/).map(p => p.trim());
         }
-        return parts.length >= 2 ? { present: parts[0].toLowerCase(), past: parts[1].toLowerCase(), hebrew: parts[2] || '' } : null;
+        if (parts.length === 2) {
+          return { present: parts[0].toLowerCase(), past: '', hebrew: parts[1], type: 'vocab' };
+        }
+        if (parts.length >= 3) {
+          return { present: parts[0].toLowerCase(), past: parts[1].toLowerCase(), hebrew: parts[2], type: 'verb' };
+        }
+        return null;
       })
       .filter(Boolean);
   }
@@ -494,17 +499,24 @@
     verbEl.style.color = 'transparent';
     verbEl.style.background = '#ffd0d0';
     document.getElementById('hint-btn').style.display = 'inline-flex';
-    document.getElementById('hebrew-hint').textContent = verb.hebrew ? `🇮🇱 ${verb.hebrew}` : '';
+    const isVocab = verb.type === 'vocab';
+    document.getElementById('hebrew-hint').textContent = isVocab ? '' : (verb.hebrew ? `🇮🇱 ${verb.hebrew}` : '');
+    document.getElementById('present-label').childNodes[0].textContent = isVocab ? 'English word ' : 'Present form ';
+    document.getElementById('present-label-sub').textContent = '✏️ Type what you heard';
+    document.getElementById('past-label').childNodes[0].textContent = isVocab ? 'תרגום לעברית ' : 'Past form ';
+    document.getElementById('past-label-sub').textContent = isVocab ? '🇮🇱 מה זה אומר?' : '⏪ What happened yesterday?';
+    const pastInput = document.getElementById('past-input');
+    pastInput.placeholder = isVocab ? 'כתוב/י את התרגום לעברית...' : 'Type the past verb...';
+    pastInput.style.direction = isVocab ? 'rtl' : 'ltr';
     document.getElementById('present-input').value = '';
-    document.getElementById('past-input').value = '';
+    pastInput.value = '';
     document.getElementById('present-feedback').textContent = '';
     document.getElementById('past-feedback').textContent = '';
     document.getElementById('present-input').className = 'answer-input';
-    document.getElementById('past-input').className = 'answer-input';
+    pastInput.className = 'answer-input';
     document.getElementById('progress-label').textContent = `${current + 1} / ${verbs.length}`;
     document.getElementById('progress-bar').style.width = `${(current / verbs.length) * 100}%`;
 
-    // auto-speak after short delay
     setTimeout(() => speakCurrent(), 400);
     document.getElementById('present-input').focus();
   }
@@ -527,11 +539,18 @@
     if (checked) { nextVerb(); return; }
 
     const verb = verbs[current];
+    const isVocab = verb.type === 'vocab';
     const presentVal = document.getElementById('present-input').value.trim().toLowerCase();
-    const pastVal = document.getElementById('past-input').value.trim().toLowerCase();
+    const pastVal = document.getElementById('past-input').value.trim();
 
     const presentOk = presentVal === verb.present;
-    const pastOk = pastVal === verb.past;
+    let pastOk;
+    if (isVocab) {
+      const hebrewOptions = verb.hebrew.split('/').map(h => h.trim());
+      pastOk = hebrewOptions.some(h => pastVal === h);
+    } else {
+      pastOk = pastVal.toLowerCase() === verb.past;
+    }
 
     const pIn = document.getElementById('present-input');
     const paIn = document.getElementById('past-input');
@@ -555,9 +574,9 @@
       paFb.className = 'feedback correct';
     } else {
       paIn.className = 'answer-input wrong';
-      paFb.textContent = `❌ Answer: ${verb.past}`;
+      paFb.textContent = `❌ ${isVocab ? 'תשובה' : 'Answer'}: ${isVocab ? verb.hebrew : verb.past}`;
       paFb.className = 'feedback wrong';
-      paIn.value = verb.past;
+      paIn.value = isVocab ? verb.hebrew : verb.past;
     }
 
     if (presentOk && pastOk) score++;
@@ -566,6 +585,7 @@
       present: verb.present,
       past: verb.past,
       hebrew: verb.hebrew,
+      type: verb.type,
       presentOk,
       pastOk,
       presentGiven: presentVal,
@@ -587,7 +607,7 @@
   function skipVerb() {
     if (!checked) {
       const verb = verbs[current];
-      results.push({ present: verb.present, past: verb.past, hebrew: verb.hebrew, presentOk: false, pastOk: false, skipped: true });
+      results.push({ present: verb.present, past: verb.past, hebrew: verb.hebrew, type: verb.type, presentOk: false, pastOk: false, skipped: true });
     }
     nextVerb();
   }
@@ -623,11 +643,18 @@
     const list = document.getElementById('result-list');
     list.innerHTML = results.map(r => {
       const ok = r.presentOk && r.pastOk;
+      const isVocab = r.type === 'vocab';
+      const wordLine = isVocab
+        ? `${r.present} = <span style="color:var(--purple);font-size:0.9rem">${r.hebrew}</span>`
+        : `${r.present} → ${r.past}${r.hebrew ? ` <span style="color:var(--purple);font-size:0.9rem">(${r.hebrew})</span>` : ''}`;
+      const wrongLine = isVocab
+        ? `You wrote: ${r.presentGiven || '(skipped)'} / ${r.pastGiven || '(skipped)'}`
+        : `You wrote: ${r.presentGiven || '(skipped)'} → ${r.pastGiven || '(skipped)'}`;
       return `<div class="result-item ${ok ? 'ok' : 'bad'}">
         <span class="ri">${ok ? '✅' : '❌'}</span>
         <div class="verb-pair">
-          <div>${r.present} → ${r.past}${r.hebrew ? ` <span style="color:var(--purple);font-size:0.9rem">(${r.hebrew})</span>` : ''}</div>
-          ${!ok ? `<div class="answer-info">You wrote: ${r.presentGiven || '(skipped)'} → ${r.pastGiven || '(skipped)'}</div>` : ''}
+          <div>${wordLine}</div>
+          ${!ok ? `<div class="answer-info">${wrongLine}</div>` : ''}
         </div>
       </div>`;
     }).join('');
